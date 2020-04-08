@@ -1,5 +1,5 @@
 module.exports = function(schema, option) {
-  const {prettier} = option;
+  const { prettier } = option;
 
   // imports
   const imports = [];
@@ -10,15 +10,15 @@ module.exports = function(schema, option) {
   // Global Public Functions
   const utils = [];
 
-  // Classes 
+  // Classes
   const classes = [];
 
   // 1vw = width / 100
-  const _w = option.responsive.width / 100;
+  const _w = option.responsive.width / 100 || 750;
 
   const isExpression = (value) => {
     return /^\{\{.*\}\}$/.test(value);
-  }
+  };
 
   const toString = (value) => {
     if ({}.toString.call(value) === '[object Function]') {
@@ -34,56 +34,99 @@ module.exports = function(schema, option) {
         } else {
           return value;
         }
-      })
+      });
     }
 
     return String(value);
   };
 
-  // convert to responsive unit, such as vw
-  const parseStyle = (style) => {
-    for (let key in style) {
-      switch (key) {
-        case 'fontSize':
-        case 'marginTop':
-        case 'marginBottom':
-        case 'paddingTop':
-        case 'paddingBottom':
-        case 'height':
-        case 'top':
-        case 'bottom':
-        case 'width':
-        case 'maxWidth':
-        case 'left':
-        case 'right':
-        case 'paddingRight':
-        case 'paddingLeft':
-        case 'marginLeft':
-        case 'marginRight':
-        case 'lineHeight':
-        case 'borderBottomRightRadius':
-        case 'borderBottomLeftRadius':
-        case 'borderTopRightRadius':
-        case 'borderTopLeftRadius':
-        case 'borderRadius':
-          style[key] = (parseInt(style[key]) / _w).toFixed(2) + 'vw';
-          break;
+  // flexDirection -> flex-direction
+  const parseCamelToLine = (string) => {
+    return string
+      .split(/(?=[A-Z])/)
+      .join('-')
+      .toLowerCase();
+  };
+
+  // className structure support
+  const generateScss = (schema) => {
+    let scss = '';
+
+    function walk(json) {
+      if (json.props.className) {
+        let className = json.props.className;
+
+        scss += `.${className} {`;
+
+        for (let key in style[className]) {
+          scss += `${parseCamelToLine(key)}: ${style[className][key]};\n`;
+        }
+      }
+
+      if (json.children && json.children.length > 0) {
+        json.children.forEach((child) => walk(child));
+      }
+
+      if (json.props.className) {
+        scss += '}';
       }
     }
 
-    return style;
-  }
+    walk(schema);
+
+    return scss;
+  };
+
+  // convert to responsive unit, such as vw
+  const parseStyle = (styles) => {
+    for (let style in styles) {
+      for (let key in styles[style]) {
+        switch (key) {
+          case 'fontSize':
+          case 'marginTop':
+          case 'marginBottom':
+          case 'paddingTop':
+          case 'paddingBottom':
+          case 'height':
+          case 'top':
+          case 'bottom':
+          case 'width':
+          case 'maxWidth':
+          case 'left':
+          case 'right':
+          case 'paddingRight':
+          case 'paddingLeft':
+          case 'marginLeft':
+          case 'marginRight':
+          case 'lineHeight':
+          case 'borderBottomRightRadius':
+          case 'borderBottomLeftRadius':
+          case 'borderTopRightRadius':
+          case 'borderTopLeftRadius':
+          case 'borderRadius':
+            styles[style][key] =
+              (parseInt(styles[style][key]) / _w).toFixed(2) + 'vw';
+            break;
+        }
+      }
+    }
+
+    return styles;
+  };
 
   // parse function, return params and content
   const parseFunction = (func) => {
     const funcString = func.toString();
     const params = funcString.match(/\([^\(\)]*\)/)[0].slice(1, -1);
-    const content = funcString.slice(funcString.indexOf('{') + 1, funcString.lastIndexOf('}'));
+    const content = funcString.slice(
+      funcString.indexOf('{') + 1,
+      funcString.lastIndexOf('}')
+    );
     return {
       params,
-      content
+      content,
     };
-  }
+  };
 
   // parse layer props(static values or expression)
   const parseProps = (value, isReactNode) => {
@@ -102,15 +145,15 @@ module.exports = function(schema, option) {
         return `'${value}'`;
       }
     } else if (typeof value === 'function') {
-      const {params, content} = parseFunction(value);
+      const { params, content } = parseFunction(value);
       return `(${params}) => {${content}}`;
     }
-  }
+  };
 
   // parse async dataSource
   const parseDataSource = (data) => {
     const name = data.id;
-    const {uri, method, params} = data.options;
+    const { uri, method, params } = data.options;
     const action = data.type;
     let payload = {};
 
@@ -120,7 +163,7 @@ module.exports = function(schema, option) {
           imports.push(`import {fetch} from 'whatwg-fetch'`);
         }
         payload = {
-          method: method
+          method: method,
         };
 
         break;
@@ -139,7 +182,9 @@ module.exports = function(schema, option) {
 
     // params parse should in string template
     if (params) {
-      payload = `${toString(payload).slice(0, -1)} ,body: ${isExpression(params) ? parseProps(params) : toString(params)}}`;
+      payload = `${toString(payload).slice(0, -1)} ,body: ${
+        isExpression(params) ? parseProps(params) : toString(params)
+      }}`;
     } else {
       payload = toString(payload);
     }
@@ -155,22 +200,22 @@ module.exports = function(schema, option) {
         .catch((e) => {
           console.log('error', e);
         })
-      `
+      `;
     }
 
     result += '}';
 
     return `${name}() ${result}`;
-  }
+  };
 
   // parse condition: whether render the layer
   const parseCondition = (condition, render) => {
     if (typeof condition === 'boolean') {
-      return `${condition} && ${render}`
+      return `${condition} && ${render}`;
     } else if (typeof condition === 'string') {
-      return `${condition.slice(2, -2)} && ${render}`
+      return `${condition.slice(2, -2)} && ${render}`;
     }
-  }
+  };
 
   // parse loop render
   const parseLoop = (loop, loopArg, render) => {
@@ -186,25 +231,27 @@ module.exports = function(schema, option) {
 
     // add loop key
     const tagEnd = render.match(/^<.+?\s/)[0].length;
-    render = `${render.slice(0, tagEnd)} key={${loopArgIndex}}${render.slice(tagEnd)}`;
+    render = `${render.slice(0, tagEnd)} key={${loopArgIndex}}${render.slice(
+      tagEnd
+    )}`;
 
-    // remove `this` 
-    const re = new RegExp(`this.${loopArgItem}`, 'g')
+    // remove `this`
+    const re = new RegExp(`this.${loopArgItem}`, 'g');
     render = render.replace(re, loopArgItem);
 
     return `${data}.map((${loopArgItem}, ${loopArgIndex}) => {
       return (${render});
     })`;
-  }
+  };
 
   // generate render xml
   const generateRender = (schema) => {
     const type = schema.componentName.toLowerCase();
     const className = schema.props && schema.props.className;
-    const classString = className ? ` style={styles.${className}}` : '';
+    const classString = className ? ` className={styles.${className}}` : '';
 
     if (className) {
-      style[className] = parseStyle(schema.props.style);
+      style[className] = schema.props.style;
     }
 
     let xml;
@@ -214,22 +261,25 @@ module.exports = function(schema, option) {
       if (['className', 'style', 'text', 'src'].indexOf(key) === -1) {
         props += ` ${key}={${parseProps(schema.props[key])}}`;
       }
-    })
+    });
 
-    switch(type) {
+    switch (type) {
       case 'text':
         const innerText = parseProps(schema.props.text, true);
         xml = `<span${classString}${props}>${innerText}</span>`;
         break;
       case 'image':
         const source = parseProps(schema.props.src);
-        xml = `<img${classString}${props} src={${source}} />`;
+        xml = `<img${classString}${props} src={${source}} alt='' />`;
         break;
       case 'div':
       case 'page':
       case 'block':
+      case 'component':
         if (schema.children && schema.children.length) {
-          xml = `<div${classString}${props}>${transform(schema.children)}</div>`;
+          xml = `<div${classString}${props}>${transform(
+            schema.children
+          )}</div>`;
         } else {
           xml = `<div${classString}${props} />`;
         }
@@ -237,7 +287,7 @@ module.exports = function(schema, option) {
     }
 
     if (schema.loop) {
-      xml = parseLoop(schema.loop, schema.loopArgs, xml)
+      xml = parseLoop(schema.loop, schema.loopArgs, xml);
     }
     if (schema.condition) {
       xml = parseCondition(schema.condition, xml);
@@ -247,7 +297,7 @@ module.exports = function(schema, option) {
     }
 
     return xml;
-  }
+  };
 
   // parse schema
   const transform = (schema) => {
@@ -260,14 +310,16 @@ module.exports = function(schema, option) {
     } else {
       const type = schema.componentName.toLowerCase();
 
-      if (['page', 'block'].indexOf(type) !== -1) {
+      if (['page', 'block', 'component'].indexOf(type) !== -1) {
         // 容器组件处理: state/method/dataSource/lifeCycle/render
         const states = [];
         const lifeCycles = [];
         const methods = [];
         const init = [];
-        const render = [`render(){ return (`];
-        let classData = [`class ${schema.componentName}_${classes.length} extends Component {`];
+        const render = [`render(): JSX.Element { return (`];
+        let classData = [
+          `class ${schema.componentName}${classes.length} extends Component {`,
+        ];
 
         if (schema.state) {
           states.push(`state = ${toString(schema.state)}`);
@@ -283,15 +335,19 @@ module.exports = function(schema, option) {
         if (schema.dataSource && Array.isArray(schema.dataSource.list)) {
           schema.dataSource.list.forEach((item) => {
             if (typeof item.isInit === 'boolean' && item.isInit) {
-              init.push(`this.${item.id}();`)
+              init.push(`this.${item.id}();`);
             } else if (typeof item.isInit === 'string') {
-              init.push(`if (${parseProps(item.isInit)}) { this.${item.id}(); }`)
+              init.push(
+                `if (${parseProps(item.isInit)}) { this.${item.id}(); }`
+              );
             }
             methods.push(parseDataSource(item));
           });
 
           if (schema.dataSource.dataHandler) {
-            const { params, content } = parseFunction(schema.dataSource.dataHandler);
+            const { params, content } = parseFunction(
+              schema.dataSource.dataHandler
+            );
             methods.push(`dataHandler(${params}) {${content}}`);
             init.push(`this.dataHandler()`);
           }
@@ -299,24 +355,34 @@ module.exports = function(schema, option) {
 
         if (schema.lifeCycles) {
           if (!schema.lifeCycles['_constructor']) {
-            lifeCycles.push(`constructor(props, context) { super(); ${init.join('\n')}}`);
+            lifeCycles.push(
+              `constructor(props, context) { super(props); ${init.join('\n')}}`
+            );
           }
 
           Object.keys(schema.lifeCycles).forEach((name) => {
             const { params, content } = parseFunction(schema.lifeCycles[name]);
 
             if (name === '_constructor') {
-              lifeCycles.push(`constructor(${params}) { super(); ${content} ${init.join('\n')}}`);
+              lifeCycles.push(
+                `constructor(${params}) { super(props); ${content} ${init.join(
+                  '\n'
+                )}}`
+              );
             } else {
               lifeCycles.push(`${name}(${params}) {${content}}`);
             }
           });
         }
 
-        render.push(generateRender(schema))
+        render.push(generateRender(schema));
         render.push(`);}`);
 
-        classData = classData.concat(states).concat(lifeCycles).concat(methods).concat(render);
+        classData = classData
+          .concat(states)
+          .concat(lifeCycles)
+          .concat(methods)
+          .concat(render);
         classData.push('}');
 
         classes.push(classData.join('\n'));
@@ -340,31 +406,53 @@ module.exports = function(schema, option) {
   const prettierOpt = {
     parser: 'babel',
     printWidth: 120,
-    singleQuote: true
+    singleQuote: true,
   };
 
   return {
     panelDisplay: [
       {
-        panelName: `index.jsx`,
-        panelValue: prettier.format(`
+        panelName: `index.tsx`,
+        panelValue: prettier.format(
+          `
           'use strict';
 
           import React, { Component } from 'react';
           ${imports.join('\n')}
-          import styles from './style.js';
+          import styles from './index.scss';
           ${utils.join('\n')}
           ${classes.join('\n')}
-          export default ${schema.componentName}_0;
-        `, prettierOpt),
+          export default ${schema.componentName}0;
+        `,
+          prettierOpt
+        ),
         panelType: 'js',
       },
       {
         panelName: `style.js`,
-        panelValue: prettier.format(`export default ${toString(style)}`, prettierOpt),
-        panelType: 'js'
-      }
+        panelValue: prettier.format(
+          `export default ${toString(style)}`,
+          prettierOpt
+        ),
+        panelType: 'js',
+      },
+
+      {
+        panelName: `index.scss`,
+        panelValue: prettier.format(generateScss(schema, style), {
+          parser: 'scss',
+        }),
+        panelType: 'scss',
+      },
+      {
+        panelName: `style.responsive.js`,
+        panelValue: prettier.format(
+          `export default ${toString(parseStyle(style))}`,
+          prettierOpt
+        ),
+        panelType: 'js',
+      },
     ],
-    noTemplate: true
+    noTemplate: true,
   };
-}
+};
