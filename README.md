@@ -2,6 +2,7 @@
 优先支持 typeScript + sass + css module 开发模式中的 jsx 和 css，生成的页面代码是index.tsx和index.scss。
 
 其他支持（按优先级排序，从上到下）：
+
 typeScript + sass 开发模式中的 jsx 和 css，生成的页面代码是index2.tsx和index.scss。
 
 
